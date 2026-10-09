@@ -1,29 +1,32 @@
 # =====================================================================
 # SCRIPT FINE-TUNING LLM UNTUK SCRIPTFLOW AI (GOOGLE COLAB / UNSLOTH)
-# Model: Llama-3-8B-Instruct, Qwen2.5-7B-Instruct, atau Llama-3.2-3B-Instruct
+# Model: Qwen2.5-7B-Instruct, Llama-3.2-3B-Instruct, atau Llama-3-8B-Instruct
 # =====================================================================
 
 import os
+import gc
+import torch
+
 # Mencegah akumulasi fragmentasi memori CUDA pada Tesla T4 Colab
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-import torch
+# Paksa bersihkan RAM GPU & Garbage Collector sebelum memuat model
+gc.collect()
+torch.cuda.empty_cache()
+
 from unsloth import FastLanguageModel
 from datasets import load_dataset
 from trl import SFTTrainer
 from transformers import TrainingArguments
 
-# Bersihkan cache GPU sebelum memulai
-torch.cuda.empty_cache()
-
 # 1. Pilih Model & Panjang Sekuens (Hemat VRAM T4 Colab 15GB)
 max_seq_length = 2048  # Cukup untuk 1 adegan naskah lengkap
 
-# Pilihan model (pilih salah satu):
-# - "unsloth/Llama-3.2-3B-Instruct-bnb-4bit" (Sangat cepat & ringan VRAM ~4GB)
-# - "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"    (Sangat akurat & stabil VRAM ~7GB)
-# - "unsloth/llama-3-8b-Instruct-bnb-4bit"    (Standar 8B)
-model_name = "unsloth/llama-3-8b-Instruct-bnb-4bit"
+# Pilihan model (Qwen2.5-7B sangat disarankan untuk Colab T4 karena jauh lebih hemat VRAM & cepat):
+# - "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"    (Rekomendasi Utama: Sangat Akurat & Ringan VRAM ~6.5GB)
+# - "unsloth/Llama-3.2-3B-Instruct-bnb-4bit" (Super Cepat & Super Ringan VRAM ~4GB)
+# - "unsloth/llama-3-8b-Instruct-bnb-4bit"    (Llama 3 8B Standar)
+model_name = "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"
 
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name = model_name,
@@ -89,4 +92,5 @@ trainer_stats = trainer.train()
 # 6. Ekspor Model ke GGUF (Untuk Ollama / vLLM / LocalAI)
 model.save_pretrained_gguf("model_scriptflow_gguf", tokenizer, quantization_method = "q4_k_m")
 print("✅ Fine-tuning selesai! Model GGUF disimpan di folder model_scriptflow_gguf")
+
 
