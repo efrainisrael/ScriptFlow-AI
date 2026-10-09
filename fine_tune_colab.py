@@ -55,8 +55,8 @@ def format_prompts(examples):
         texts.append(text)
     return { "text" : texts }
 
-# Silakan sesuaikan nama file dataset yang ingin dilatih (Khusus Genre Horor & Thriller)
-dataset_file = "dataset_horor_thriller.jsonl"
+# Silakan sesuaikan nama file dataset yang ingin dilatih (Khusus Genre Kriminal & Polisi)
+dataset_file = "dataset_kriminal_polisi.jsonl"
 dataset = load_dataset("json", data_files=dataset_file, split="train")
 dataset = dataset.map(format_prompts, batched=True)
 
