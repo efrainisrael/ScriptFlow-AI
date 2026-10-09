@@ -1,13 +1,11 @@
 # =====================================================================
-# SCRIPT FINE-TUNING LLM UNTUK SCRIPTFLOW AI (GOOGLE COLAB / UN-SLOTH)
-# Model: Llama-3-8B-Instruct atau Qwen2.5-7B-Instruct (Sangat Cepat & Akurat)
+# SCRIPT FINE-TUNING LLM UNTUK SCRIPTFLOW AI (GOOGLE COLAB / UNSLOTH)
+# Model: Llama-3-8B-Instruct, Qwen2.5-7B-Instruct, atau Llama-3.2-3B-Instruct
 # =====================================================================
 
-# 1. Install Unsloth & Dependencies (Jalankan di cell pertama Colab)
-"""
-!pip install unsloth unsloth_zoo
-!pip install --no-deps trl peft accelerate bitsandbytes
-"""
+import os
+# Mencegah akumulasi fragmentasi memori CUDA pada Tesla T4 Colab
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import torch
 from unsloth import FastLanguageModel
@@ -15,16 +13,26 @@ from datasets import load_dataset
 from trl import SFTTrainer
 from transformers import TrainingArguments
 
-# 2. Muat Base Model 4-bit (Hemat VRAM T4 Colab)
-max_seq_length = 2048
+# Bersihkan cache GPU sebelum memulai
+torch.cuda.empty_cache()
+
+# 1. Pilih Model & Panjang Sekuens (Hemat VRAM T4 Colab 15GB)
+max_seq_length = 2048  # Cukup untuk 1 adegan naskah lengkap
+
+# Pilihan model (pilih salah satu):
+# - "unsloth/Llama-3.2-3B-Instruct-bnb-4bit" (Sangat cepat & ringan VRAM ~4GB)
+# - "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"    (Sangat akurat & stabil VRAM ~7GB)
+# - "unsloth/llama-3-8b-Instruct-bnb-4bit"    (Standar 8B)
+model_name = "unsloth/llama-3-8b-Instruct-bnb-4bit"
+
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/llama-3-8b-Instruct-bnb-4bit", # atau "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"
+    model_name = model_name,
     max_seq_length = max_seq_length,
     dtype = None,
     load_in_4bit = True,
 )
 
-# 3. Setup LoRA Adapter untuk Fine-Tuning
+# 2. Setup LoRA Adapter untuk Fine-Tuning
 model = FastLanguageModel.get_peft_model(
     model,
     r = 16,
@@ -36,7 +44,7 @@ model = FastLanguageModel.get_peft_model(
     random_state = 3407,
 )
 
-# 4. Format Dataset ke Template Chat
+# 3. Format Dataset ke Template Chat
 def format_prompts(examples):
     texts = []
     for msgs in examples["messages"]:
@@ -44,10 +52,12 @@ def format_prompts(examples):
         texts.append(text)
     return { "text" : texts }
 
-dataset = load_dataset("json", data_files="dataset_scriptflow_ner.jsonl", split="train")
+# Silakan sesuaikan nama file dataset yang ingin dilatih (misal: dataset_aksi_ringan.jsonl)
+dataset_file = "dataset_aksi_ringan.jsonl"
+dataset = load_dataset("json", data_files=dataset_file, split="train")
 dataset = dataset.map(format_prompts, batched=True)
 
-# 5. Konfigurasi Trainer & Jalankan Fine-Tuning
+# 4. Konfigurasi Trainer (Batch Size = 1 untuk mencegah CUDA OOM)
 trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
@@ -57,10 +67,10 @@ trainer = SFTTrainer(
     dataset_num_proc = 2,
     packing = False,
     args = TrainingArguments(
-        per_device_train_batch_size = 2,
-        gradient_accumulation_steps = 4,
+        per_device_train_batch_size = 1,     # Diubah dari 2 ke 1 agar tidak OOM di GPU T4
+        gradient_accumulation_steps = 4,      # Menjaga gradien tetap stabil
         warmup_steps = 5,
-        max_steps = 60, # Ganti jumlah steps sesuai ukuran dataset
+        max_steps = 60,                      # Sesuaikan jumlah step pelatihan
         learning_rate = 2e-4,
         fp16 = not torch.cuda.is_bf16_supported(),
         bf16 = torch.cuda.is_bf16_supported(),
@@ -73,8 +83,10 @@ trainer = SFTTrainer(
     ),
 )
 
+# 5. Jalankan Pelatihan
 trainer_stats = trainer.train()
 
-# 6. Ekspor Model ke GGUF (Bisa Di-load oleh Ollama / vLLM / LocalAI)
+# 6. Ekspor Model ke GGUF (Untuk Ollama / vLLM / LocalAI)
 model.save_pretrained_gguf("model_scriptflow_gguf", tokenizer, quantization_method = "q4_k_m")
-print("Fine-tuning selesai! Model GGUF disimpan di folder model_scriptflow_gguf")
+print("✅ Fine-tuning selesai! Model GGUF disimpan di folder model_scriptflow_gguf")
+
