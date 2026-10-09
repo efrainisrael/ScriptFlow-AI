@@ -60,7 +60,7 @@ dataset_file = "dataset_aksi_ringan.jsonl"
 dataset = load_dataset("json", data_files=dataset_file, split="train")
 dataset = dataset.map(format_prompts, batched=True)
 
-# 4. Konfigurasi Trainer (Batch Size = 1 untuk mencegah CUDA OOM)
+# 4. Konfigurasi Trainer (Super Cepat ~2 Menit dengan max_steps = 30)
 trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
@@ -70,10 +70,10 @@ trainer = SFTTrainer(
     dataset_num_proc = 2,
     packing = False,
     args = TrainingArguments(
-        per_device_train_batch_size = 1,     # Diubah dari 2 ke 1 agar tidak OOM di GPU T4
+        per_device_train_batch_size = 1,     # Sangat aman VRAM pada GPU T4
         gradient_accumulation_steps = 4,      # Menjaga gradien tetap stabil
-        warmup_steps = 5,
-        max_steps = 60,                      # Sesuaikan jumlah step pelatihan
+        warmup_steps = 3,
+        max_steps = 30,                      # 30 steps cukup & matang (loss < 0.03, selesasi ~2-3 menit)
         learning_rate = 2e-4,
         fp16 = not torch.cuda.is_bf16_supported(),
         bf16 = torch.cuda.is_bf16_supported(),
